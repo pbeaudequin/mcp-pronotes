@@ -2,6 +2,7 @@
 config.json
 .env
 .pronote-state.json
+pronote-data/
 
 # Python
 __pycache__/

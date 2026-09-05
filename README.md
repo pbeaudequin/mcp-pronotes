@@ -20,6 +20,7 @@ canteen menus.
 | `get_timetable` | Daily or weekly class schedule (lessons, rooms, teachers, cancellations) |
 | `get_grades` | Grades with class average, min, max, and coefficient per subject |
 | `get_homework` | Upcoming homework with due dates, completion status, and attached files or links |
+| `get_recent_resources` | Recent homework resources with bounded text extraction for PDF and text files |
 | `get_absences` | Absences, delays, and punishments for a given period |
 | `get_student_info` | Student profile, class, school name, and available periods |
 | `get_averages` | Subject averages with student, class, min, and max values |
@@ -72,6 +73,11 @@ PRONOTE_ENT=agora06
 PRONOTE_DEVICE_NAME=mcp-pronotes
 ```
 
+Container deployments can mount credentials as files instead of environment
+values by setting `PRONOTE_USERNAME_FILE`, `PRONOTE_PASSWORD_FILE`, and,
+optionally, `PRONOTE_ACCOUNT_PIN_FILE`. Set `PRONOTE_STATE_PATH` to a writable
+persistent path when the application directory is read-only.
+
 ### 3. Register with Claude Code
 
 ```bash
@@ -113,6 +119,10 @@ environment. Process environment variables have the highest priority.
 | env var | `PRONOTE_ACCOUNT_PIN` | Optional Pronote MFA PIN |
 | env var | `PRONOTE_DEVICE_NAME` | Remembered-device label; defaults to `mcp-pronotes` |
 | env var | `PRONOTE_CLIENT_IDENTIFIER` | Optional explicit remembered-device identifier |
+| env var | `PRONOTE_USERNAME_FILE` | File containing the username; used when `PRONOTE_USERNAME` is unset |
+| env var | `PRONOTE_PASSWORD_FILE` | File containing the password; used when `PRONOTE_PASSWORD` is unset |
+| env var | `PRONOTE_ACCOUNT_PIN_FILE` | File containing the optional MFA PIN |
+| env var | `PRONOTE_STATE_PATH` | Writable persistent path for the remembered-device state |
 
 ## Multi-child support
 
