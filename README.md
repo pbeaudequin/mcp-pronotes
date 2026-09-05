@@ -2,6 +2,11 @@
 
 **MCP server for Pronote -- access French school data from any AI assistant.**
 
+> **Maintenance status: active.** This fork is maintained for PRONOTE 2026,
+> including the current Agora06/EduConnect parent authentication flow. Runtime
+> dependencies are pinned to tested versions or commits for reproducible
+> deployments.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
