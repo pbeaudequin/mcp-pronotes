@@ -83,7 +83,7 @@ class TestHomeworkFormatting(unittest.TestCase):
         self.assertTrue(payload["external_content"]["untrusted"])
         self.assertEqual(payload["resources"][0]["text"], "Revision")
 
-    def test_school_profile_only_exposes_homework_and_resources(self) -> None:
+    def test_school_profile_exposes_grades_homework_and_resources(self) -> None:
         previous = os.environ.get("PRONOTE_TOOL_PROFILE")
         os.environ["PRONOTE_TOOL_PROFILE"] = "school"
         try:
@@ -97,6 +97,8 @@ class TestHomeworkFormatting(unittest.TestCase):
         self.assertEqual(
             {tool.name for tool in tools},
             {
+                "get_grades",
+                "get_averages",
                 "get_homework",
                 "get_recent_resources",
                 "get_recent_course_materials",

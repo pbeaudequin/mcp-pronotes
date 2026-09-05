@@ -714,6 +714,8 @@ TOOL_HANDLERS = {
 
 TOOL_PROFILES = {
     "school": {
+        "get_grades",
+        "get_averages",
         "get_homework",
         "get_recent_resources",
         "get_recent_course_materials",

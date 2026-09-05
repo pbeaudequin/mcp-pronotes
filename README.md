@@ -23,14 +23,14 @@ canteen menus.
 | Tool | Description |
 |------|-------------|
 | `get_timetable` | Daily or weekly class schedule (lessons, rooms, teachers, cancellations) |
-| `get_grades` | Grades with class average, min, max, and coefficient per subject |
+| `get_grades` | Notes avec moyenne de classe, minimum, maximum et coefficient par matière |
 | `get_homework` | Upcoming homework with stable lookup fields, French completion labels (`✅ terminé` / `⏳ à faire`), and resources |
 | `set_homework_status` | Mark one exact homework item as completed or not completed, then verify the persisted Pronote state |
 | `get_recent_resources` | Recent homework resources with bounded text extraction for PDF and text files |
 | `get_recent_course_materials` | Recent cahier de textes descriptions and course materials, with bounded PDF/text extraction |
 | `get_absences` | Absences, delays, and punishments for a given period |
 | `get_student_info` | Student profile, class, school name, and available periods |
-| `get_averages` | Subject averages with student, class, min, and max values |
+| `get_averages` | Moyennes par matière avec moyenne de l'élève, de la classe, minimum et maximum |
 | `get_menus` | School canteen menus for a date range |
 
 All tools support **multi-child accounts**: pass `child_name` to select a
@@ -88,8 +88,8 @@ values by setting `PRONOTE_USERNAME_FILE`, `PRONOTE_PASSWORD_FILE`, and,
 optionally, `PRONOTE_ACCOUNT_PIN_FILE`. Set `PRONOTE_STATE_PATH` to a writable
 persistent path when the application directory is read-only.
 Set `PRONOTE_TOOL_PROFILE=school` for a least-privilege deployment that exposes
-only homework reading/status updates, homework resources, and recent course
-materials.
+grades, averages, homework reading/status updates, homework resources, and
+recent course materials.
 Scanned PDFs and image supports are OCRed with Tesseract (`fra+eng` by
 default). Override languages with `PRONOTE_OCR_LANGUAGES` and bound scanned
 documents with `PRONOTE_OCR_MAX_PAGES` (default 10, maximum 20).
@@ -139,7 +139,7 @@ environment. Process environment variables have the highest priority.
 | env var | `PRONOTE_PASSWORD_FILE` | File containing the password; used when `PRONOTE_PASSWORD` is unset |
 | env var | `PRONOTE_ACCOUNT_PIN_FILE` | File containing the optional MFA PIN |
 | env var | `PRONOTE_STATE_PATH` | Writable persistent path for the remembered-device state |
-| env var | `PRONOTE_TOOL_PROFILE` | Optional `school` profile exposing only homework and recent course materials/resources |
+| env var | `PRONOTE_TOOL_PROFILE` | Profil `school` exposant les notes, moyennes, devoirs et supports récents |
 | env var | `PRONOTE_OCR_LANGUAGES` | Tesseract languages for scanned supports; defaults to `fra+eng` |
 | env var | `PRONOTE_OCR_MAX_PAGES` | Maximum OCR pages per support; defaults to 10 and is capped at 20 |
 
