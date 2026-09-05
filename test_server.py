@@ -1,4 +1,5 @@
 import asyncio
+import os
 import unittest
 from datetime import date
 from types import SimpleNamespace
@@ -61,6 +62,22 @@ class TestHomeworkFormatting(unittest.TestCase):
         payload = server.json.loads(content[0].text)
         self.assertTrue(payload["external_content"]["untrusted"])
         self.assertEqual(payload["resources"][0]["text"], "Revision")
+
+    def test_school_profile_only_exposes_homework_and_resources(self) -> None:
+        previous = os.environ.get("PRONOTE_TOOL_PROFILE")
+        os.environ["PRONOTE_TOOL_PROFILE"] = "school"
+        try:
+            tools = asyncio.run(server.list_tools())
+        finally:
+            if previous is None:
+                os.environ.pop("PRONOTE_TOOL_PROFILE", None)
+            else:
+                os.environ["PRONOTE_TOOL_PROFILE"] = previous
+
+        self.assertEqual(
+            {tool.name for tool in tools},
+            {"get_homework", "get_recent_resources"},
+        )
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ Configuration: environment variables or config.json in the same directory.
   PRONOTE_PASSWORD_FILE — optional file containing the password
   PRONOTE_ACCOUNT_PIN_FILE — optional file containing the MFA PIN
   PRONOTE_STATE_PATH — optional persistent device-state file path
+  PRONOTE_TOOL_PROFILE — optional tool allowlist profile ("school")
 """
 
 from __future__ import annotations
@@ -382,7 +383,7 @@ app = Server("pronotes")
 
 @app.list_tools()
 async def list_tools() -> list[types.Tool]:
-    return [
+    tools = [
         types.Tool(
             name="get_timetable",
             description=(
@@ -568,6 +569,8 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
     ]
+    enabled = _enabled_tool_names()
+    return [tool for tool in tools if tool.name in enabled]
 
 
 TOOL_HANDLERS = {
@@ -581,10 +584,28 @@ TOOL_HANDLERS = {
     "get_menus",
 }
 
+TOOL_PROFILES = {
+    "school": {"get_homework", "get_recent_resources"},
+}
+
+
+def _enabled_tool_names() -> set[str]:
+    profile = os.environ.get("PRONOTE_TOOL_PROFILE", "").strip().lower()
+    if not profile:
+        return TOOL_HANDLERS
+    if profile not in TOOL_PROFILES:
+        raise ValueError(f"Unknown PRONOTE_TOOL_PROFILE: {profile}")
+    return TOOL_PROFILES[profile]
+
 
 @app.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
-    if name not in TOOL_HANDLERS:
+    try:
+        enabled = _enabled_tool_names()
+    except ValueError as exc:
+        return _error_result(str(exc))
+
+    if name not in enabled:
         return _error_result(f"Unknown tool: {name}")
 
     try:

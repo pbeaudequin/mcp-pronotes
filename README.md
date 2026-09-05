@@ -82,6 +82,8 @@ Container deployments can mount credentials as files instead of environment
 values by setting `PRONOTE_USERNAME_FILE`, `PRONOTE_PASSWORD_FILE`, and,
 optionally, `PRONOTE_ACCOUNT_PIN_FILE`. Set `PRONOTE_STATE_PATH` to a writable
 persistent path when the application directory is read-only.
+Set `PRONOTE_TOOL_PROFILE=school` for a least-privilege deployment that exposes
+only `get_homework` and `get_recent_resources`.
 
 ### 3. Register with Claude Code
 
@@ -128,6 +130,7 @@ environment. Process environment variables have the highest priority.
 | env var | `PRONOTE_PASSWORD_FILE` | File containing the password; used when `PRONOTE_PASSWORD` is unset |
 | env var | `PRONOTE_ACCOUNT_PIN_FILE` | File containing the optional MFA PIN |
 | env var | `PRONOTE_STATE_PATH` | Writable persistent path for the remembered-device state |
+| env var | `PRONOTE_TOOL_PROFILE` | Optional `school` profile exposing only homework and recent resources |
 
 ## Multi-child support
 
