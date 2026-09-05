@@ -3,7 +3,7 @@ import os
 import unittest
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import server
 
@@ -11,6 +11,7 @@ import server
 class TestHomeworkFormatting(unittest.TestCase):
     def test_resources_include_files_and_links(self) -> None:
         homework = SimpleNamespace(
+            id="hw-1",
             subject=SimpleNamespace(name="Maths"),
             description="Exercises",
             date=None,
@@ -24,6 +25,9 @@ class TestHomeworkFormatting(unittest.TestCase):
 
         result = server._format_homework(homework)
 
+        self.assertEqual(result["homework_id"], "hw-1")
+        self.assertEqual(result["status"], "à faire")
+        self.assertEqual(result["status_emoji"], "⏳")
         self.assertEqual(
             result["resources"],
             [
@@ -96,8 +100,144 @@ class TestHomeworkFormatting(unittest.TestCase):
                 "get_homework",
                 "get_recent_resources",
                 "get_recent_course_materials",
+                "set_homework_status",
             },
         )
+
+    def test_default_child_is_explicitly_reselected(self) -> None:
+        client = SimpleNamespace(
+            children=[SimpleNamespace(name="Clement")],
+            set_child=Mock(),
+        )
+
+        selected = server._select_child(client)
+
+        self.assertEqual(selected, "Clement")
+        client.set_child.assert_called_once_with("Clement")
+
+    def test_set_homework_status_updates_and_verifies(self) -> None:
+        current = SimpleNamespace(id="hw-7", done=False, set_done=Mock())
+        verified = SimpleNamespace(
+            id="hw-7",
+            done=True,
+            subject=SimpleNamespace(name="MATHEMATIQUES"),
+            description="Calculer les quotients",
+        )
+        client = SimpleNamespace(homework=Mock(side_effect=[[current], [verified]]))
+
+        result = asyncio.run(
+            server._handle_set_homework_status(
+                client,
+                {
+                    "homework_id": "hw-7",
+                    "due_date": "2026-09-08",
+                    "done": True,
+                    "child_name": "Clement",
+                },
+                "Clement",
+            )
+        )
+
+        payload = server.json.loads(result[0].text)
+        current.set_done.assert_called_once_with(True)
+        self.assertTrue(payload["success"])
+        self.assertTrue(payload["verified"])
+        self.assertEqual(payload["new_status"], "terminé")
+        self.assertEqual(payload["new_status_emoji"], "✅")
+
+    def test_set_homework_status_is_idempotent(self) -> None:
+        current = SimpleNamespace(
+            id="hw-7",
+            done=True,
+            subject=SimpleNamespace(name="MATHEMATIQUES"),
+            description="Calculer les quotients",
+            set_done=Mock(),
+        )
+        client = SimpleNamespace(homework=Mock(side_effect=[[current], [current]]))
+
+        result = asyncio.run(
+            server._handle_set_homework_status(
+                client,
+                {
+                    "homework_id": "hw-7",
+                    "due_date": "2026-09-08",
+                    "done": True,
+                    "child_name": "Clement",
+                },
+                "Clement",
+            )
+        )
+
+        payload = server.json.loads(result[0].text)
+        current.set_done.assert_not_called()
+        self.assertTrue(payload["success"])
+        self.assertFalse(payload["changed"])
+
+    def test_set_homework_status_rejects_stale_id(self) -> None:
+        client = SimpleNamespace(homework=lambda _from, _to: [])
+
+        with self.assertRaisesRegex(ValueError, "introuvable ou périmé"):
+            asyncio.run(
+                server._handle_set_homework_status(
+                    client,
+                    {
+                        "homework_id": "stale",
+                        "due_date": "2026-09-08",
+                        "done": True,
+                        "child_name": "Clement",
+                    },
+                    "Clement",
+                )
+            )
+
+    def test_set_homework_status_reports_failed_verification(self) -> None:
+        current = SimpleNamespace(id="hw-7", done=False, set_done=Mock())
+        still_pending = SimpleNamespace(id="hw-7", done=False)
+        client = SimpleNamespace(
+            homework=Mock(side_effect=[[current], [still_pending]])
+        )
+
+        result = asyncio.run(
+            server._handle_set_homework_status(
+                client,
+                {
+                    "homework_id": "hw-7",
+                    "due_date": "2026-09-08",
+                    "done": True,
+                    "child_name": "Clement",
+                },
+                "Clement",
+            )
+        )
+
+        payload = server.json.loads(result[0].text)
+        self.assertFalse(payload["success"])
+        self.assertFalse(payload["verified"])
+        self.assertTrue(payload["write_attempted"])
+        self.assertNotIn("changed", payload)
+
+    def test_write_tool_requires_child_name(self) -> None:
+        previous = os.environ.get("PRONOTE_TOOL_PROFILE")
+        os.environ["PRONOTE_TOOL_PROFILE"] = "school"
+        try:
+            result = asyncio.run(
+                server.call_tool(
+                    "set_homework_status",
+                    {
+                        "homework_id": "hw-7",
+                        "due_date": "2026-09-08",
+                        "done": True,
+                    },
+                )
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("PRONOTE_TOOL_PROFILE", None)
+            else:
+                os.environ["PRONOTE_TOOL_PROFILE"] = previous
+
+        payload = server.json.loads(result[0].text)
+        self.assertIn("child_name est obligatoire", payload["error"])
 
     def test_recent_course_materials_reads_lesson_content(self) -> None:
         lesson = SimpleNamespace(

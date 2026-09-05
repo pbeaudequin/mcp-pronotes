@@ -24,7 +24,8 @@ canteen menus.
 |------|-------------|
 | `get_timetable` | Daily or weekly class schedule (lessons, rooms, teachers, cancellations) |
 | `get_grades` | Grades with class average, min, max, and coefficient per subject |
-| `get_homework` | Upcoming homework with due dates, completion status, and attached files or links |
+| `get_homework` | Upcoming homework with stable lookup fields, French completion labels (`✅ terminé` / `⏳ à faire`), and resources |
+| `set_homework_status` | Mark one exact homework item as completed or not completed, then verify the persisted Pronote state |
 | `get_recent_resources` | Recent homework resources with bounded text extraction for PDF and text files |
 | `get_recent_course_materials` | Recent cahier de textes descriptions and course materials, with bounded PDF/text extraction |
 | `get_absences` | Absences, delays, and punishments for a given period |
@@ -33,7 +34,10 @@ canteen menus.
 | `get_menus` | School canteen menus for a date range |
 
 All tools support **multi-child accounts**: pass `child_name` to select a
-specific child, or omit it to default to the first child.
+specific child, or omit it to default to the first child. The mutating
+`set_homework_status` tool requires the exact `child`, `homework_id`, and
+`due_date` returned by `get_homework`; it never chooses a homework by fuzzy
+matching.
 
 ## Quick start
 
@@ -84,7 +88,8 @@ values by setting `PRONOTE_USERNAME_FILE`, `PRONOTE_PASSWORD_FILE`, and,
 optionally, `PRONOTE_ACCOUNT_PIN_FILE`. Set `PRONOTE_STATE_PATH` to a writable
 persistent path when the application directory is read-only.
 Set `PRONOTE_TOOL_PROFILE=school` for a least-privilege deployment that exposes
-only homework, homework resources, and recent course materials.
+only homework reading/status updates, homework resources, and recent course
+materials.
 Scanned PDFs and image supports are OCRed with Tesseract (`fra+eng` by
 default). Override languages with `PRONOTE_OCR_LANGUAGES` and bound scanned
 documents with `PRONOTE_OCR_MAX_PAGES` (default 10, maximum 20).

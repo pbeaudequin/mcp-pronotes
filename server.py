@@ -237,11 +237,11 @@ def _parse_date(date_str: Optional[str]) -> date:
 
 def _select_child(client: pronotepy.ParentClient, child_name: Optional[str] = None) -> str:
     """Select a child by name. Returns the selected child's name."""
-    if child_name:
-        client.set_child(child_name)
-        return child_name
-    # Default: first child (already selected on connection)
-    return client.children[0].name
+    selected_name = child_name or client.children[0].name
+    # ParentClient keeps mutable child state. Always select explicitly so a
+    # previous request for another child cannot leak into this one.
+    client.set_child(selected_name)
+    return selected_name
 
 
 def _list_children_names(client: pronotepy.ParentClient) -> list[str]:
@@ -270,10 +270,13 @@ def _format_lesson(lesson: Any) -> dict[str, Any]:
 
 def _format_homework(hw: Any) -> dict[str, Any]:
     return {
+        "homework_id": str(hw.id),
         "subject": hw.subject.name if hw.subject else None,
         "description": hw.description,
         "due_date": hw.date.isoformat() if hw.date else None,
         "done": hw.done,
+        "status": "terminé" if hw.done else "à faire",
+        "status_emoji": "✅" if hw.done else "⏳",
         "background_color": hw.background_color,
         "resources": [
             {
@@ -577,6 +580,39 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="set_homework_status",
+            description=(
+                "Mark one exact Pronote homework assignment as completed or not completed. "
+                "Call get_homework first and reuse its homework_id, due_date, and child. "
+                "Never guess an identifier or select a homework approximately."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "homework_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Exact homework_id returned by get_homework.",
+                    },
+                    "due_date": {
+                        "type": "string",
+                        "description": "Exact due date in YYYY-MM-DD format returned by get_homework.",
+                    },
+                    "done": {
+                        "type": "boolean",
+                        "description": "True for terminé; false for à faire.",
+                    },
+                    "child_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Exact child name returned in the get_homework response.",
+                    },
+                },
+                "required": ["homework_id", "due_date", "done", "child_name"],
+                "additionalProperties": False,
+            },
+        ),
+        types.Tool(
             name="get_absences",
             description=(
                 "Get absences, delays (retards), and punishments for a student in the current period."
@@ -669,6 +705,7 @@ TOOL_HANDLERS = {
     "get_homework",
     "get_recent_resources",
     "get_recent_course_materials",
+    "set_homework_status",
     "get_absences",
     "get_student_info",
     "get_averages",
@@ -680,6 +717,7 @@ TOOL_PROFILES = {
         "get_homework",
         "get_recent_resources",
         "get_recent_course_materials",
+        "set_homework_status",
     },
 }
 
@@ -702,6 +740,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
 
     if name not in enabled:
         return _error_result(f"Unknown tool: {name}")
+    if name == "set_homework_status" and not arguments.get("child_name"):
+        return _error_result(
+            "child_name est obligatoire pour modifier le statut d’un devoir"
+        )
 
     try:
         client = _get_client()
@@ -723,6 +765,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             return await _handle_recent_resources(client, arguments, selected)
         elif name == "get_recent_course_materials":
             return await _handle_recent_course_materials(client, arguments, selected)
+        elif name == "set_homework_status":
+            return await _handle_set_homework_status(client, arguments, selected)
         elif name == "get_absences":
             return await _handle_absences(client, arguments, selected)
         elif name == "get_student_info":
@@ -847,6 +891,82 @@ async def _handle_homework(
         "homework": [_format_homework(h) for h in homework],
     }
     return _json_result(result)
+
+
+async def _handle_set_homework_status(
+    client: pronotepy.Client, args: dict[str, Any], child: Optional[str]
+) -> list[types.TextContent]:
+    """Update one exact homework item and verify the persisted Pronote state."""
+    homework_id = args.get("homework_id")
+    due_date_raw = args.get("due_date")
+    requested_done = args.get("done")
+
+    if not isinstance(homework_id, str) or not homework_id.strip():
+        raise ValueError("homework_id doit être l’identifiant exact renvoyé par get_homework")
+    if not isinstance(due_date_raw, str) or not due_date_raw:
+        raise ValueError("due_date est obligatoire")
+    if not isinstance(requested_done, bool):
+        raise ValueError("done doit être un booléen")
+
+    due_date = _parse_date(due_date_raw)
+    candidates = client.homework(due_date, due_date)
+    matches = [item for item in candidates if str(item.id) == homework_id]
+    if len(matches) != 1:
+        raise ValueError(
+            "Devoir introuvable ou périmé : relisez les devoirs avec get_homework avant de réessayer"
+        )
+
+    homework = matches[0]
+    previous_done = bool(homework.done)
+    changed = previous_done != requested_done
+    if changed:
+        homework.set_done(requested_done)
+
+    # pronotepy mutates its local object after posting. Reload from Pronote and
+    # only report success when the remote state confirms the requested value.
+    refreshed = client.homework(due_date, due_date)
+    verified = next(
+        (item for item in refreshed if str(item.id) == homework_id),
+        None,
+    )
+    if verified is None or bool(verified.done) != requested_done:
+        return _json_result(
+            {
+                "success": False,
+                "verified": False,
+                "write_attempted": changed,
+                "child": child,
+                "homework_id": homework_id,
+                "due_date": due_date.isoformat(),
+                "requested_status": "terminé" if requested_done else "à faire",
+                "requested_status_emoji": "✅" if requested_done else "⏳",
+                "message": (
+                    "Pronote n’a pas confirmé le nouveau statut. "
+                    "Relisez les devoirs avant d’annoncer la modification."
+                ),
+            }
+        )
+
+    return _json_result(
+        {
+            "success": True,
+            "verified": True,
+            "changed": changed,
+            "child": child,
+            "homework_id": homework_id,
+            "subject": verified.subject.name if verified.subject else None,
+            "description": verified.description,
+            "due_date": due_date.isoformat(),
+            "previous_status": "terminé" if previous_done else "à faire",
+            "new_status": "terminé" if requested_done else "à faire",
+            "new_status_emoji": "✅" if requested_done else "⏳",
+            "message": (
+                "Devoir marqué comme terminé."
+                if requested_done
+                else "Devoir remis à faire."
+            ),
+        }
+    )
 
 
 async def _handle_recent_resources(
