@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import pronotepy
+import pymupdf
 from dotenv import load_dotenv
 from pypdf import PdfReader
 from pronotepy.ent import cas_agora06, cas_agora06_parent
@@ -297,21 +298,78 @@ def _extract_resource_text(
         data = attachment.data
         if len(data) > 10 * 1024 * 1024:
             return None, "file_too_large"
-        if name.endswith(".pdf") or data.startswith(b"%PDF"):
+        is_pdf = name.endswith(".pdf") or data.startswith(b"%PDF")
+        is_image = name.endswith(
+            (".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp")
+        )
+        if is_pdf:
             reader = PdfReader(BytesIO(data))
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
         elif name.endswith((".txt", ".md", ".csv")):
             text = data.decode("utf-8", errors="replace")
+        elif is_image:
+            text, truncated = _ocr_resource(data, name, max_chars)
+            normalized = _normalize_resource_text(text)
+            if not normalized:
+                return None, "no_extractable_text"
+            return normalized[:max_chars], "ocr_page_limit" if truncated else None
         else:
             return None, "unsupported_format"
     except Exception:
         logger.warning("Could not extract Pronote resource %r", attachment.name)
         return None, "extraction_failed"
 
-    normalized = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+    normalized = _normalize_resource_text(text)
+    if not normalized and is_pdf:
+        try:
+            text, truncated = _ocr_resource(data, name, max_chars)
+        except Exception:
+            logger.warning("Could not OCR Pronote resource %r", attachment.name)
+            return None, "ocr_failed"
+        normalized = _normalize_resource_text(text)
+        if normalized:
+            return normalized[:max_chars], "ocr_page_limit" if truncated else None
     if not normalized:
         return None, "no_extractable_text"
     return normalized[:max_chars], None
+
+
+def _normalize_resource_text(text: str) -> str:
+    return "\n".join(line.strip() for line in text.splitlines() if line.strip())
+
+
+def _ocr_resource(data: bytes, name: str, max_chars: int) -> tuple[str, bool]:
+    """OCR a scanned PDF or image in memory with bounded pages and output."""
+    languages = os.environ.get("PRONOTE_OCR_LANGUAGES", "fra+eng")
+    page_limit = min(20, max(1, int(os.environ.get("PRONOTE_OCR_MAX_PAGES", "10"))))
+    is_pdf = name.lower().endswith(".pdf") or data.startswith(b"%PDF")
+
+    if is_pdf:
+        document = pymupdf.open(stream=data, filetype="pdf")
+    else:
+        suffix = Path(name).suffix.lower().lstrip(".") or None
+        image_document = pymupdf.open(stream=data, filetype=suffix)
+        try:
+            document = pymupdf.open(
+                stream=image_document.convert_to_pdf(), filetype="pdf"
+            )
+        finally:
+            image_document.close()
+
+    extracted = []
+    truncated = len(document) > page_limit
+    try:
+        for page in document.pages(stop=page_limit):
+            text_page = page.get_textpage_ocr(
+                language=languages, dpi=150, full=True
+            )
+            extracted.append(page.get_text(textpage=text_page))
+            if sum(len(chunk) for chunk in extracted) >= max_chars:
+                truncated = truncated or page.number + 1 < len(document)
+                break
+    finally:
+        document.close()
+    return "\n".join(extracted), truncated
 
 
 def _format_grade(grade: Any) -> dict[str, Any]:

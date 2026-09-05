@@ -85,6 +85,9 @@ optionally, `PRONOTE_ACCOUNT_PIN_FILE`. Set `PRONOTE_STATE_PATH` to a writable
 persistent path when the application directory is read-only.
 Set `PRONOTE_TOOL_PROFILE=school` for a least-privilege deployment that exposes
 only homework, homework resources, and recent course materials.
+Scanned PDFs and image supports are OCRed with Tesseract (`fra+eng` by
+default). Override languages with `PRONOTE_OCR_LANGUAGES` and bound scanned
+documents with `PRONOTE_OCR_MAX_PAGES` (default 10, maximum 20).
 
 ### 3. Register with Claude Code
 
@@ -132,6 +135,8 @@ environment. Process environment variables have the highest priority.
 | env var | `PRONOTE_ACCOUNT_PIN_FILE` | File containing the optional MFA PIN |
 | env var | `PRONOTE_STATE_PATH` | Writable persistent path for the remembered-device state |
 | env var | `PRONOTE_TOOL_PROFILE` | Optional `school` profile exposing only homework and recent course materials/resources |
+| env var | `PRONOTE_OCR_LANGUAGES` | Tesseract languages for scanned supports; defaults to `fra+eng` |
+| env var | `PRONOTE_OCR_MAX_PAGES` | Maximum OCR pages per support; defaults to 10 and is capped at 20 |
 
 ## Multi-child support
 
@@ -167,6 +172,8 @@ when needed. No manual intervention required.
 - Python 3.10+
 - [pronotepy](https://github.com/bain3/pronotepy) >= 2.14.0
 - [mcp](https://pypi.org/project/mcp/) >= 1.20.0
+- [PyMuPDF](https://pymupdf.readthedocs.io/) >= 1.26.0
+- Tesseract OCR with French and English language data for scanned supports
 
 ## Credits
 

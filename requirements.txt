@@ -2,3 +2,4 @@ pronotepy @ https://github.com/pbeaudequin/pronotepy/archive/cc01652d4a4b0698fe2
 mcp>=1.20.0,<2
 python-dotenv>=1.2.1,<2
 pypdf>=6.0,<7
+PyMuPDF>=1.26,<2

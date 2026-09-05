@@ -42,6 +42,21 @@ class TestHomeworkFormatting(unittest.TestCase):
         self.assertEqual(text, "Bonjour\nMonde")
         self.assertIsNone(error)
 
+    def test_scanned_pdf_falls_back_to_ocr(self) -> None:
+        attachment = SimpleNamespace(
+            name="scan.pdf", type=1, data=b"%PDF scanned"
+        )
+
+        with (
+            patch.object(server, "PdfReader") as reader,
+            patch.object(server, "_ocr_resource", return_value=("Texte OCR", False)),
+        ):
+            reader.return_value.pages = [SimpleNamespace(extract_text=lambda: "")]
+            text, error = server._extract_resource_text(attachment, 1000)
+
+        self.assertEqual(text, "Texte OCR")
+        self.assertIsNone(error)
+
     def test_recent_resources_marks_content_untrusted(self) -> None:
         attachment = SimpleNamespace(name="lesson.txt", type=1, data=b"Revision")
         homework = SimpleNamespace(
