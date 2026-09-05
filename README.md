@@ -26,6 +26,7 @@ canteen menus.
 | `get_grades` | Grades with class average, min, max, and coefficient per subject |
 | `get_homework` | Upcoming homework with due dates, completion status, and attached files or links |
 | `get_recent_resources` | Recent homework resources with bounded text extraction for PDF and text files |
+| `get_recent_course_materials` | Recent cahier de textes descriptions and course materials, with bounded PDF/text extraction |
 | `get_absences` | Absences, delays, and punishments for a given period |
 | `get_student_info` | Student profile, class, school name, and available periods |
 | `get_averages` | Subject averages with student, class, min, and max values |
@@ -83,7 +84,7 @@ values by setting `PRONOTE_USERNAME_FILE`, `PRONOTE_PASSWORD_FILE`, and,
 optionally, `PRONOTE_ACCOUNT_PIN_FILE`. Set `PRONOTE_STATE_PATH` to a writable
 persistent path when the application directory is read-only.
 Set `PRONOTE_TOOL_PROFILE=school` for a least-privilege deployment that exposes
-only `get_homework` and `get_recent_resources`.
+only homework, homework resources, and recent course materials.
 
 ### 3. Register with Claude Code
 
@@ -130,7 +131,7 @@ environment. Process environment variables have the highest priority.
 | env var | `PRONOTE_PASSWORD_FILE` | File containing the password; used when `PRONOTE_PASSWORD` is unset |
 | env var | `PRONOTE_ACCOUNT_PIN_FILE` | File containing the optional MFA PIN |
 | env var | `PRONOTE_STATE_PATH` | Writable persistent path for the remembered-device state |
-| env var | `PRONOTE_TOOL_PROFILE` | Optional `school` profile exposing only homework and recent resources |
+| env var | `PRONOTE_TOOL_PROFILE` | Optional `school` profile exposing only homework and recent course materials/resources |
 
 ## Multi-child support
 

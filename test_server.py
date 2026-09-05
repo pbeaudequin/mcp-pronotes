@@ -3,6 +3,7 @@ import os
 import unittest
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import server
 
@@ -76,8 +77,59 @@ class TestHomeworkFormatting(unittest.TestCase):
 
         self.assertEqual(
             {tool.name for tool in tools},
-            {"get_homework", "get_recent_resources"},
+            {
+                "get_homework",
+                "get_recent_resources",
+                "get_recent_course_materials",
+            },
         )
+
+    def test_recent_course_materials_reads_lesson_content(self) -> None:
+        lesson = SimpleNamespace(
+            id="lesson-1",
+            start=server.datetime(2026, 9, 4, 10, 0),
+            subject=SimpleNamespace(name="MATHEMATIQUES"),
+        )
+        client = SimpleNamespace(
+            lessons=lambda _from, _to: [lesson],
+            get_week=lambda _date: 36,
+            post=lambda *_args: {
+                "dataSec": {
+                    "data": {
+                        "ListeCahierDeTextes": {
+                            "V": [
+                                {
+                                    "cours": {"V": {"N": "lesson-1"}},
+                                    "listeContenus": {"V": [{"raw": True}]},
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+        )
+        course_content = SimpleNamespace(
+            title="Calcul de quotients",
+            category="Support de cours",
+            description="Méthode à réviser",
+            files=[SimpleNamespace(name="cours.txt", type=1, data=b"Exemple")],
+        )
+
+        with patch.object(
+            server.pronotepy, "LessonContent", return_value=course_content
+        ):
+            result = asyncio.run(
+                server._handle_recent_course_materials(
+                    client,
+                    {"date_from": "2026-09-01", "date_to": "2026-09-05"},
+                    "Clement",
+                )
+            )
+
+        payload = server.json.loads(result[0].text)
+        self.assertTrue(payload["external_content"]["untrusted"])
+        self.assertEqual(payload["material_count"], 1)
+        self.assertEqual(payload["materials"][0]["resources"][0]["text"], "Exemple")
 
 
 if __name__ == "__main__":
