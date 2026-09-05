@@ -1,5 +1,7 @@
 # Credentials — never commit
 config.json
+.env
+.pronote-state.json
 
 # Python
 __pycache__/

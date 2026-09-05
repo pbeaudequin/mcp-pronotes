@@ -19,7 +19,7 @@ canteen menus.
 |------|-------------|
 | `get_timetable` | Daily or weekly class schedule (lessons, rooms, teachers, cancellations) |
 | `get_grades` | Grades with class average, min, max, and coefficient per subject |
-| `get_homework` | Upcoming homework assignments with due dates and completion status |
+| `get_homework` | Upcoming homework with due dates, completion status, and attached files or links |
 | `get_absences` | Absences, delays, and punishments for a given period |
 | `get_student_info` | Student profile, class, school name, and available periods |
 | `get_averages` | Subject averages with student, class, min, and max values |
@@ -51,20 +51,25 @@ Create a `config.json` in the project directory:
   "pronote_url": "https://XXXX.index-education.net/pronote/mobile.parent.html",
   "username": "your_username",
   "password": "your_password",
-  "account_type": "parent"
+  "account_type": "parent",
+  "ent": "agora06",
+  "device_name": "mcp-pronotes"
 }
 ```
 
 Set `account_type` to `"student"` if you are logging in with a student account.
 
-Alternatively, use environment variables (they take precedence over
-`config.json`):
+Alternatively, create a `.env` file next to `server.py`, or export the same
+environment variables. Process environment variables take precedence over
+`.env` and `config.json`:
 
-```bash
-export PRONOTE_URL="https://XXXX.index-education.net/pronote/mobile.parent.html"
-export PRONOTE_USERNAME="your_username"
-export PRONOTE_PASSWORD="your_password"
-export PRONOTE_ACCOUNT_TYPE="parent"
+```dotenv
+PRONOTE_URL=https://XXXX.index-education.net/pronote/mobile.parent.html
+PRONOTE_USERNAME=your_username
+PRONOTE_PASSWORD=your_password
+PRONOTE_ACCOUNT_TYPE=parent
+PRONOTE_ENT=agora06
+PRONOTE_DEVICE_NAME=mcp-pronotes
 ```
 
 ### 3. Register with Claude Code
@@ -87,8 +92,8 @@ The server communicates over stdio and works with any MCP-compatible client.
 
 ## Configuration
 
-The server reads configuration from two sources (environment variables override
-`config.json`):
+The server reads configuration from `config.json`, `.env`, and the process
+environment. Process environment variables have the highest priority.
 
 | Source | Key | Description |
 |--------|-----|-------------|
@@ -96,10 +101,18 @@ The server reads configuration from two sources (environment variables override
 | config.json | `username` | Your Pronote username |
 | config.json | `password` | Your Pronote password |
 | config.json | `account_type` | `"parent"` or `"student"` |
+| config.json | `ent` | ENT provider; use `"agora06"` for Agora06/EduConnect |
+| config.json | `account_pin` | Optional Pronote MFA PIN |
+| config.json | `device_name` | Remembered-device label |
+| config.json | `client_identifier` | Optional explicit remembered-device identifier |
 | env var | `PRONOTE_URL` | Overrides `pronote_url` |
 | env var | `PRONOTE_USERNAME` | Overrides `username` |
 | env var | `PRONOTE_PASSWORD` | Overrides `password` |
 | env var | `PRONOTE_ACCOUNT_TYPE` | Overrides `account_type` |
+| env var | `PRONOTE_ENT` | ENT provider; use `agora06` for Agora06/EduConnect |
+| env var | `PRONOTE_ACCOUNT_PIN` | Optional Pronote MFA PIN |
+| env var | `PRONOTE_DEVICE_NAME` | Remembered-device label; defaults to `mcp-pronotes` |
+| env var | `PRONOTE_CLIENT_IDENTIFIER` | Optional explicit remembered-device identifier |
 
 ## Multi-child support
 
@@ -114,10 +127,12 @@ Use the `get_student_info` tool to list all children and their classes.
 The server authenticates with a standard Pronote username and password. This is
 the same login you use on the Pronote website or mobile app.
 
-**ENT (Espace Numerique de Travail):** If your school uses an ENT portal for
-authentication, you may need to provide the ENT-specific Pronote URL. Check
-[pronotepy's documentation](https://github.com/bain3/pronotepy) for ENT
-configuration details.
+**ENT (Espace Numerique de Travail):** Set `PRONOTE_ENT=agora06` for an Agora06
+parent or student account. The server selects the matching EduConnect profile
+automatically. It stores Pronote's generated device identifier in the ignored
+`.pronote-state.json` file so subsequent connections reuse the registered
+device. If Pronote asks for a PIN, set `PRONOTE_ACCOUNT_PIN` for the first
+connection and remove it afterwards.
 
 **QR code login:** Not yet supported. QR code / token-based authentication is
 planned for a future release.

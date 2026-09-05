@@ -9,6 +9,10 @@ Configuration: environment variables or config.json in the same directory.
   PRONOTE_USERNAME   — Parent/student username
   PRONOTE_PASSWORD   — Account password
   PRONOTE_ACCOUNT_TYPE — "parent" (default) or "student"
+  PRONOTE_ENT         — ENT provider, currently "agora06" for Agora06 SSO
+  PRONOTE_ACCOUNT_PIN — optional Pronote MFA PIN
+  PRONOTE_DEVICE_NAME — remembered-device label (default: "mcp-pronotes")
+  PRONOTE_CLIENT_IDENTIFIER — optional persisted Pronote device identifier
 """
 
 from __future__ import annotations
@@ -24,6 +28,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 import pronotepy
+from dotenv import load_dotenv
+from pronotepy.ent import cas_agora06, cas_agora06_parent
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp import types
@@ -42,6 +48,11 @@ logger = logging.getLogger("mcp-pronotes")
 # Configuration
 # ---------------------------------------------------------------------------
 
+# Development credentials live next to this entrypoint. Existing process
+# variables retain precedence over values from the file.
+load_dotenv(Path(__file__).with_name(".env"))
+
+
 def _load_config() -> dict[str, str]:
     """Load config from env vars, falling back to config.json."""
     config: dict[str, str] = {}
@@ -55,6 +66,10 @@ def _load_config() -> dict[str, str]:
             config["username"] = file_cfg.get("username", "")
             config["password"] = file_cfg.get("password", "")
             config["account_type"] = file_cfg.get("account_type", "parent")
+            config["ent"] = file_cfg.get("ent", "")
+            config["account_pin"] = file_cfg.get("account_pin", "")
+            config["device_name"] = file_cfg.get("device_name", "mcp-pronotes")
+            config["client_identifier"] = file_cfg.get("client_identifier", "")
 
     # Environment variables take precedence
     if os.environ.get("PRONOTE_URL"):
@@ -65,11 +80,41 @@ def _load_config() -> dict[str, str]:
         config["password"] = os.environ["PRONOTE_PASSWORD"]
     if os.environ.get("PRONOTE_ACCOUNT_TYPE"):
         config["account_type"] = os.environ["PRONOTE_ACCOUNT_TYPE"]
+    if os.environ.get("PRONOTE_ENT"):
+        config["ent"] = os.environ["PRONOTE_ENT"]
+    if os.environ.get("PRONOTE_ACCOUNT_PIN"):
+        config["account_pin"] = os.environ["PRONOTE_ACCOUNT_PIN"]
+    if os.environ.get("PRONOTE_DEVICE_NAME"):
+        config["device_name"] = os.environ["PRONOTE_DEVICE_NAME"]
+    if os.environ.get("PRONOTE_CLIENT_IDENTIFIER"):
+        config["client_identifier"] = os.environ["PRONOTE_CLIENT_IDENTIFIER"]
 
     return config
 
 
 CONFIG = _load_config()
+_STATE_PATH = Path(__file__).with_name(".pronote-state.json")
+
+
+def _load_client_identifier() -> Optional[str]:
+    configured = CONFIG.get("client_identifier", "")
+    if configured:
+        return configured
+    try:
+        state = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
+        identifier = state.get("client_identifier")
+        return identifier if isinstance(identifier, str) and identifier else None
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def _save_client_identifier(identifier: Optional[str]) -> None:
+    if not identifier or CONFIG.get("client_identifier"):
+        return
+    _STATE_PATH.write_text(
+        json.dumps({"client_identifier": identifier}), encoding="utf-8"
+    )
+    _STATE_PATH.chmod(0o600)
 
 # ---------------------------------------------------------------------------
 # Pronote client management (cached, with auto-reconnect)
@@ -111,13 +156,34 @@ def _get_client() -> pronotepy.ParentClient | pronotepy.Client:
             "Set them in config.json or as environment variables."
         )
 
-    logger.info("Connecting to Pronote as %s (%s)...", username, account_type)
+    logger.info("Connecting to Pronote (%s account)...", account_type)
+
+    ent = None
+    if CONFIG.get("ent", "").lower() == "agora06":
+        ent = cas_agora06_parent if account_type == "parent" else cas_agora06
 
     if account_type == "parent":
-        _client = pronotepy.ParentClient(url, username=username, password=password)
+        _client = pronotepy.ParentClient(
+            url,
+            username=username,
+            password=password,
+            ent=ent,
+            account_pin=CONFIG.get("account_pin") or None,
+            client_identifier=_load_client_identifier(),
+            device_name=CONFIG.get("device_name", "mcp-pronotes"),
+        )
     else:
-        _client = pronotepy.Client(url, username=username, password=password)
+        _client = pronotepy.Client(
+            url,
+            username=username,
+            password=password,
+            ent=ent,
+            account_pin=CONFIG.get("account_pin") or None,
+            client_identifier=_load_client_identifier(),
+            device_name=CONFIG.get("device_name", "mcp-pronotes"),
+        )
 
+    _save_client_identifier(_client.client_identifier)
     _client_timestamp = time.time()
     logger.info("Connected to Pronote successfully.")
     return _client
@@ -178,6 +244,14 @@ def _format_homework(hw: Any) -> dict[str, Any]:
         "due_date": hw.date.isoformat() if hw.date else None,
         "done": hw.done,
         "background_color": hw.background_color,
+        "resources": [
+            {
+                "name": attachment.name,
+                "type": "file" if attachment.type == 1 else "link",
+                "url": attachment.url,
+            }
+            for attachment in hw.files
+        ],
     }
 
 
@@ -301,7 +375,7 @@ async def list_tools() -> list[types.Tool]:
             name="get_homework",
             description=(
                 "Get upcoming homework (devoirs) for a student. "
-                "Returns homework starting from a given date."
+                "Returns homework and attached files or links starting from a given date."
             ),
             inputSchema={
                 "type": "object",
