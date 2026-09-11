@@ -253,7 +253,7 @@ def _persist_resource(
     resource_date: date,
     class_name: Optional[str] = None,
 ) -> Optional[str]:
-    """Persist a Pronote file under class/year/subject/date; links stay links."""
+    """Persist a Pronote file under class/year/subject with a sortable date prefix."""
     root = os.environ.get("PRONOTE_RESOURCES_PATH", "").strip()
     if not root or attachment.type != 1:
         return None
@@ -265,10 +265,9 @@ def _persist_resource(
         / _safe_component(class_name, "classe-inconnue")
         / _school_year(resource_date)
         / _safe_component(subject, "matiere-inconnue")
-        / resource_date.isoformat()
     )
     directory.mkdir(parents=True, exist_ok=True)
-    destination = directory / name
+    destination = directory / f"{resource_date.isoformat()} - {name}"
     if destination.exists() and destination.read_bytes() != data:
         destination = directory / (
             f"{destination.stem}-{hashlib.sha256(data).hexdigest()[:10]}{destination.suffix}"

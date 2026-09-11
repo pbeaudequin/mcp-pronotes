@@ -29,8 +29,7 @@ class TestHomeworkFormatting(unittest.TestCase):
                     "CM1",
                     "2026-2027",
                     "Mathématiques",
-                    "2026-09-07",
-                    "Cours fractions.pdf",
+                    "2026-09-07 - Cours fractions.pdf",
                 ),
             )
             with open(saved, "rb") as handle:
