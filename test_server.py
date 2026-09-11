@@ -20,6 +20,7 @@ class TestHomeworkFormatting(unittest.TestCase):
                     subject="Mathématiques",
                     resource_date=date(2026, 9, 7),
                     class_name="CM1",
+                    category="Cours",
                 )
 
             self.assertEqual(
@@ -29,7 +30,7 @@ class TestHomeworkFormatting(unittest.TestCase):
                     "CM1",
                     "2026-2027",
                     "Mathématiques",
-                    "2026-09-07 - Cours fractions.pdf",
+                    "2026-09-07 - Cours - Cours fractions.pdf",
                 ),
             )
             with open(saved, "rb") as handle:

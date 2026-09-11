@@ -142,7 +142,7 @@ environment. Process environment variables have the highest priority.
 | env var | `PRONOTE_TOOL_PROFILE` | Profil `school` exposant les notes, moyennes, devoirs et supports récents |
 | env var | `PRONOTE_OCR_LANGUAGES` | Tesseract languages for scanned supports; defaults to `fra+eng` |
 | env var | `PRONOTE_OCR_MAX_PAGES` | Maximum OCR pages per support; defaults to 10 and is capped at 20 |
-| env var | `PRONOTE_RESOURCES_PATH` | Optional writable directory where file resources are persisted as `<class>/<school-year>/<subject>/YYYY-MM-DD - filename` |
+| env var | `PRONOTE_RESOURCES_PATH` | Optional writable directory where file resources are persisted as `<class>/<school-year>/<subject>/YYYY-MM-DD - category - filename` |
 
 ## Multi-child support
 

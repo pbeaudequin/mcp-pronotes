@@ -252,6 +252,7 @@ def _persist_resource(
     subject: Optional[str],
     resource_date: date,
     class_name: Optional[str] = None,
+    category: Optional[str] = None,
 ) -> Optional[str]:
     """Persist a Pronote file under class/year/subject with a sortable date prefix."""
     root = os.environ.get("PRONOTE_RESOURCES_PATH", "").strip()
@@ -267,7 +268,8 @@ def _persist_resource(
         / _safe_component(subject, "matiere-inconnue")
     )
     directory.mkdir(parents=True, exist_ok=True)
-    destination = directory / f"{resource_date.isoformat()} - {name}"
+    category_name = _safe_component(category, "Ressources")
+    destination = directory / f"{resource_date.isoformat()} - {category_name} - {name}"
     if destination.exists() and destination.read_bytes() != data:
         destination = directory / (
             f"{destination.stem}-{hashlib.sha256(data).hexdigest()[:10]}{destination.suffix}"
@@ -1049,6 +1051,7 @@ async def _handle_recent_resources(
                 hw.subject.name if hw.subject else None,
                 hw.date,
                 _selected_class_name(client),
+                "Devoirs",
             ) if hw.date else None
             resources.append(
                 {
@@ -1129,6 +1132,7 @@ async def _handle_recent_course_materials(
                         lesson.subject.name if lesson.subject else None,
                         lesson.start.date(),
                         _selected_class_name(client),
+                        content.category or "Cours",
                     )
                     resources.append(
                         {
