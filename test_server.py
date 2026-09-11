@@ -1,5 +1,6 @@
 import asyncio
 import os
+import tempfile
 import unittest
 from datetime import date
 from types import SimpleNamespace
@@ -9,6 +10,32 @@ import server
 
 
 class TestHomeworkFormatting(unittest.TestCase):
+    def test_persists_resource_by_subject_and_date(self) -> None:
+        attachment = SimpleNamespace(name="Cours: fractions.pdf", type=1, data=b"pdf")
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"PRONOTE_RESOURCES_PATH": directory}):
+                saved = server._persist_resource(
+                    attachment,
+                    subject="Mathématiques",
+                    resource_date=date(2026, 9, 7),
+                    class_name="CM1",
+                )
+
+            self.assertEqual(
+                saved,
+                os.path.join(
+                    directory,
+                    "CM1",
+                    "2026-2027",
+                    "Mathématiques",
+                    "2026-09-07",
+                    "Cours fractions.pdf",
+                ),
+            )
+            with open(saved, "rb") as handle:
+                self.assertEqual(handle.read(), b"pdf")
+
     def test_resources_include_files_and_links(self) -> None:
         homework = SimpleNamespace(
             id="hw-1",

@@ -22,9 +22,11 @@ Configuration: environment variables or config.json in the same directory.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+import re
 import sys
 import time
 import traceback
@@ -235,6 +237,49 @@ def _parse_date(date_str: Optional[str]) -> date:
     return datetime.strptime(date_str, "%Y-%m-%d").date()
 
 
+def _safe_component(value: Optional[str], fallback: str) -> str:
+    cleaned = re.sub(r"[^\w .-]+", "", (value or "").strip(), flags=re.UNICODE)
+    return re.sub(r"\s+", " ", cleaned).strip(" .") or fallback
+
+
+def _school_year(resource_date: date) -> str:
+    start_year = resource_date.year if resource_date.month >= 8 else resource_date.year - 1
+    return f"{start_year}-{start_year + 1}"
+
+
+def _persist_resource(
+    attachment: Any,
+    subject: Optional[str],
+    resource_date: date,
+    class_name: Optional[str] = None,
+) -> Optional[str]:
+    """Persist a Pronote file under class/year/subject/date; links stay links."""
+    root = os.environ.get("PRONOTE_RESOURCES_PATH", "").strip()
+    if not root or attachment.type != 1:
+        return None
+    data = attachment.data
+    original_name = Path(attachment.name or "resource.bin").name
+    name = _safe_component(original_name, "resource.bin")
+    directory = (
+        Path(root)
+        / _safe_component(class_name, "classe-inconnue")
+        / _school_year(resource_date)
+        / _safe_component(subject, "matiere-inconnue")
+        / resource_date.isoformat()
+    )
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / name
+    if destination.exists() and destination.read_bytes() != data:
+        destination = directory / (
+            f"{destination.stem}-{hashlib.sha256(data).hexdigest()[:10]}{destination.suffix}"
+        )
+    if not destination.exists():
+        temporary = destination.with_suffix(destination.suffix + ".tmp")
+        temporary.write_bytes(data)
+        temporary.replace(destination)
+    return str(destination)
+
+
 def _select_child(client: pronotepy.ParentClient, child_name: Optional[str] = None) -> str:
     """Select a child by name. Returns the selected child's name."""
     selected_name = child_name or client.children[0].name
@@ -242,6 +287,10 @@ def _select_child(client: pronotepy.ParentClient, child_name: Optional[str] = No
     # previous request for another child cannot leak into this one.
     client.set_child(selected_name)
     return selected_name
+
+
+def _selected_class_name(client: Any) -> Optional[str]:
+    return getattr(getattr(client, "_selected_child", None), "class_name", None)
 
 
 def _list_children_names(client: pronotepy.ParentClient) -> list[str]:
@@ -996,6 +1045,12 @@ async def _handle_recent_resources(
     for hw in client.homework(d_from, d_to):
         for attachment in hw.files:
             text, extraction_error = _extract_resource_text(attachment, max_chars)
+            persisted_path = _persist_resource(
+                attachment,
+                hw.subject.name if hw.subject else None,
+                hw.date,
+                _selected_class_name(client),
+            ) if hw.date else None
             resources.append(
                 {
                     "subject": hw.subject.name if hw.subject else None,
@@ -1006,6 +1061,7 @@ async def _handle_recent_resources(
                     "url": attachment.url if attachment.type == 0 else None,
                     "text": text,
                     "extraction_error": extraction_error,
+                    "persisted_path": persisted_path,
                 }
             )
 
@@ -1069,6 +1125,12 @@ async def _handle_recent_course_materials(
                     text, extraction_error = _extract_resource_text(
                         attachment, max_chars
                     )
+                    persisted_path = _persist_resource(
+                        attachment,
+                        lesson.subject.name if lesson.subject else None,
+                        lesson.start.date(),
+                        _selected_class_name(client),
+                    )
                     resources.append(
                         {
                             "name": attachment.name,
@@ -1076,6 +1138,7 @@ async def _handle_recent_course_materials(
                             "url": attachment.url if attachment.type == 0 else None,
                             "text": text,
                             "extraction_error": extraction_error,
+                            "persisted_path": persisted_path,
                         }
                     )
                 materials.append(
