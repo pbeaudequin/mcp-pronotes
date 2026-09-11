@@ -36,6 +36,25 @@ class TestHomeworkFormatting(unittest.TestCase):
             with open(saved, "rb") as handle:
                 self.assertEqual(handle.read(), b"pdf")
 
+    def test_existing_resource_is_used_as_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            cached_dir = os.path.join(directory, "CM1", "2026-2027", "Mathématiques")
+            os.makedirs(cached_dir)
+            cached = os.path.join(cached_dir, "2026-09-07 - Cours - lesson.pdf")
+            with open(cached, "wb") as handle:
+                handle.write(b"cached")
+
+            attachment = SimpleNamespace(
+                name="lesson.pdf", type=1,
+                data=property(lambda _self: (_ for _ in ()).throw(AssertionError("downloaded"))),
+            )
+            with patch.dict(os.environ, {"PRONOTE_RESOURCES_PATH": directory}):
+                saved = server._persist_resource(
+                    attachment, "Mathématiques", date(2026, 9, 7), "CM1", "Cours"
+                )
+
+            self.assertEqual(saved, cached)
+
     def test_resources_include_files_and_links(self) -> None:
         homework = SimpleNamespace(
             id="hw-1",

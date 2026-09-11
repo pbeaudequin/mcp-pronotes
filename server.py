@@ -258,9 +258,9 @@ def _persist_resource(
     root = os.environ.get("PRONOTE_RESOURCES_PATH", "").strip()
     if not root or attachment.type != 1:
         return None
-    data = attachment.data
     original_name = Path(attachment.name or "resource.bin").name
     name = _safe_component(original_name, "resource.bin")
+    category_name = _safe_component(category, "Ressources")
     directory = (
         Path(root)
         / _safe_component(class_name, "classe-inconnue")
@@ -268,8 +268,10 @@ def _persist_resource(
         / _safe_component(subject, "matiere-inconnue")
     )
     directory.mkdir(parents=True, exist_ok=True)
-    category_name = _safe_component(category, "Ressources")
     destination = directory / f"{resource_date.isoformat()} - {category_name} - {name}"
+    if destination.exists():
+        return str(destination)
+    data = attachment.data
     if destination.exists() and destination.read_bytes() != data:
         destination = directory / (
             f"{destination.stem}-{hashlib.sha256(data).hexdigest()[:10]}{destination.suffix}"
